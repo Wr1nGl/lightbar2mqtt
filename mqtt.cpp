@@ -179,7 +179,7 @@ bool MQTT::removeRemote(Remote *remote)
     {
         if (this->remotes[i] == remote)
         {
-            this->remotes[i]->registerCommandListener(this->remoteCommandHandler);
+            this->remotes[i]->unregisterCommandListener(this->remoteCommandHandler);
             for (int j = i; j < this->remoteCount - 1; j++)
             {
                 this->remotes[j] = this->remotes[j + 1];

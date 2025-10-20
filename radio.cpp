@@ -156,7 +156,7 @@ void Radio::setup()
     Serial.println("[Radio] Setting up radio...");
     this->radio.failureDetected = false;
 
-    this->radio.openReadingPipe(0, Radio::address);
+    this->radio.openReadingPipe(0, Radio::receive_address);
 
     this->radio.setChannel(68);
     this->radio.setDataRate(RF24_2MBPS);
@@ -166,7 +166,7 @@ void Radio::setup()
     this->radio.setAutoAck(false);
     this->radio.setRetries(15, 15);
 
-    this->radio.openWritingPipe(Radio::address);
+    this->radio.openWritingPipe(Radio::send_address);
 
     this->radio.startListening();
     Serial.println("[Radio] done!");
