@@ -67,6 +67,13 @@ void MQTT::onMessage(char *topic, byte *payload, unsigned int length)
             return;
         }
 
+        if (!strcmp(topic, String(this->getCombinedRootTopic() + "/" + lightbar->getSerialString() + "/toggle_internal").c_str()))
+        {
+            lightbar->toggleInternalState();
+            this->publishLightbarState(lightbar);
+            return;
+        }
+
         if (strcmp(topic, String(this->getCombinedRootTopic() + "/" + lightbar->getSerialString() + "/command").c_str()))
             continue;
 
@@ -75,8 +82,8 @@ void MQTT::onMessage(char *topic, byte *payload, unsigned int length)
 
         if (command.hasOwnProperty("state"))
         {
-            const char *state = command["state"];
-            lightbar->setOnOff(strcmp(state, "ON"));
+            lightbar->onOff();
+            this->publishLightbarState(lightbar);
         }
 
         if (command.hasOwnProperty("brightness"))
@@ -89,6 +96,25 @@ void MQTT::onMessage(char *topic, byte *payload, unsigned int length)
             lightbar->setMiredTemperature((uint)command["color_temp"]);
         }
     }
+}
+
+Lightbar *MQTT::get_lightbar_by_serial(uint32_t serial){
+    for (int i = 0; i < this->lightbarCount; i++){
+        if (this->lightbars[i]->getSerial() == serial){
+            return this->lightbars[i];
+        }
+    }
+}
+
+void MQTT::publishLightbarState(Lightbar *lightbar){  
+    JSONVar stateJson;
+    stateJson["state"] = lightbar->getOnState() ? "ON" : "OFF"; 
+    
+    String payload = JSON.stringify(stateJson);
+    String stateTopic = this->getCombinedRootTopic() + "/" + lightbar->getSerialString() + "/state";
+    
+    // Publish with retain flag set to true
+    this->client->publish(stateTopic.c_str(), payload.c_str(), true);
 }
 
 void MQTT::setup()
@@ -121,8 +147,15 @@ void MQTT::setup()
     this->client->publish(String(this->getCombinedRootTopic() + "/availability").c_str(), "online", true);
     this->client->subscribe(String(this->getCombinedRootTopic() + "/+/command").c_str());
     this->client->subscribe(String(this->getCombinedRootTopic() + "/+/pair").c_str());
+    this->client->subscribe(String(this->getCombinedRootTopic() + "/+/toggle_internal").c_str());
 
     this->sendAllHomeAssistantDiscoveryMessages();
+
+    //send your current state after init, should be on by default
+    for (int i = 0; i < this->lightbarCount; i++){
+        this->publishLightbarState(this->lightbars[i]);
+    }
+
 }
 
 bool MQTT::addLightbar(Lightbar *lightbar)
@@ -256,6 +289,7 @@ void MQTT::sendHomeAssistantLightbarDiscoveryMessages(Lightbar *lightbar)
     "brightness_scale": 15,
     "name": "Light bar",
     "cmd_t": "~/command",
+    "stat_t": "~/state",
     "uniq_id": ")json" + topicClient +
                            R"json(_lightbar",
     "max_mireds": 370,
@@ -278,6 +312,19 @@ void MQTT::sendHomeAssistantLightbarDiscoveryMessages(Lightbar *lightbar)
     "p": "button"
     )json" + "}";
     this->client->beginPublish(String(homeAssistantDiscoveryPrefix + "/button/" + topicClient + "/pair/config").c_str(), rendevous_str.length(), true);
+    this->client->print(rendevous_str);
+    this->client->endPublish();
+
+    rendevous_str = "{" +
+                baseConfig +
+                R"json(
+    "name": "Toggle Internal State",
+    "cmd_t": "~/toggle_internal",
+    "uniq_id": ")json" +
+                topicClient + R"json(_toggle_internal",
+    "p": "button"
+    )json" + "}";
+    this->client->beginPublish(String(homeAssistantDiscoveryPrefix + "/button/" + topicClient + "/toggle_internal/config").c_str(), rendevous_str.length(), true);
     this->client->print(rendevous_str);
     this->client->endPublish();
 }
@@ -382,9 +429,13 @@ void MQTT::sendAction(Remote *remote, byte command, byte options)
     String action;
     switch ((uint8_t)command)
     {
-    case Lightbar::Command::ON_OFF:
+    case Lightbar::Command::ON_OFF:{
         action = "press";
+        Lightbar *lightbar = this->get_lightbar_by_serial(remote->getSerial());
+        lightbar->toggleInternalState();
+        this->publishLightbarState(lightbar);
         break;
+    }
 
     case Lightbar::Command::BRIGHTER:
         action = "turn_clockwise";

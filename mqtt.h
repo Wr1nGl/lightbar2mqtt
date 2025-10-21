@@ -26,6 +26,9 @@ public:
     void sendAction(Remote *remote, byte command, byte options);
     const String getCombinedRootTopic();
     const String getClientId();
+    boolean get_MQTT_connection_failed();
+    void publishLightbarState(Lightbar *lightbar);
+    Lightbar *get_lightbar_by_serial(uint32_t serial);
 
 private:
     WiFiClient *wifiClient;

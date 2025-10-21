@@ -261,6 +261,14 @@ void Radio::handlePackage()
         Serial.println("[Radio] Ignoring package with too low package number!");
         return;
     }
+
+    if (package_id_for_serial->never_read) {
+        package_id_for_serial->never_read = false;
+    }
+    else if (package_id_for_serial->package_id == package_id){
+        return; 
+    }
+
     package_id_for_serial->package_id = package_id;
 
     Serial.println("[Radio] Package received!");
